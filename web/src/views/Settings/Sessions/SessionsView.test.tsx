@@ -4,13 +4,13 @@
 
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-import { PlusSession, getPlusSessions, revokePlusSession } from "@services/PlusSessions";
+import { PlusSession, getPlusSessions, revokeOtherPlusSessions, revokePlusSession } from "@services/PlusSessions";
 import { getUserSessionElevation } from "@services/UserSessionElevation";
 import SessionsView from "@views/Settings/Sessions/SessionsView";
 
 // Stable across renders, as the real hooks are, so the view's effects run once.
-const mockTranslate = (key: string, options?: Record<string, string>) =>
-    options ? key.replaceAll(/{{(\w+)}}/g, (_, name: string) => options[name] ?? `{{${name}}}`) : key;
+const mockTranslate = (key: string, options?: Record<string, number | string>) =>
+    options ? key.replaceAll(/{{(\w+)}}/g, (_, name: string) => String(options[name] ?? `{{${name}}}`)) : key;
 
 vi.mock("react-i18next", () => ({
     useTranslation: () => ({ t: mockTranslate }),
@@ -47,6 +47,7 @@ vi.mock("@hooks/RelativeTimeString", () => ({
 
 vi.mock("@services/PlusSessions", () => ({
     getPlusSessions: vi.fn(),
+    revokeOtherPlusSessions: vi.fn(),
     revokePlusSession: vi.fn(),
 }));
 
@@ -102,6 +103,7 @@ beforeEach(() => {
     mockSignOut.mockReset();
     vi.mocked(getPlusSessions).mockReset();
     vi.mocked(revokePlusSession).mockReset();
+    vi.mocked(revokeOtherPlusSessions).mockReset();
     vi.mocked(getUserSessionElevation).mockReset();
 });
 
@@ -118,6 +120,23 @@ const confirmRevoke = async (id: string) => {
     await act(async () => {
         fireEvent.click(document.getElementById("dialog-revoke")!);
     });
+};
+
+const confirmRevokeOthers = async () => {
+    await act(async () => {
+        fireEvent.click(document.getElementById("sessions-revoke-others")!);
+    });
+    await act(async () => {
+        fireEvent.click(document.getElementById("dialog-revoke-others")!);
+    });
+};
+
+const third: PlusSession = {
+    ...current,
+    current: false,
+    id: "third-id",
+    reported_ip: "203.0.113.25",
+    user_agent: "Mozilla/5.0 (Linux; Android 16; Pixel 9) Chrome/141.0.0.0 Mobile Safari/537.36",
 };
 
 it("lists the sessions", async () => {
@@ -330,4 +349,94 @@ it("drops the waiting revoke when the elevation status can't be retrieved", asyn
     });
 
     expect(revokePlusSession).toHaveBeenCalledOnce();
+});
+
+it("hides sign out all other sessions when the current session is the only one", async () => {
+    vi.mocked(getPlusSessions).mockResolvedValue({ secondFactor: false, sessions: [current] });
+
+    await renderView();
+
+    expect(document.getElementById("sessions-revoke-others")).toBeNull();
+});
+
+it("signs out the other sessions after confirming with their count and refreshes the list", async () => {
+    vi.mocked(getPlusSessions)
+        .mockResolvedValueOnce({ secondFactor: false, sessions: [current, other, third] })
+        .mockResolvedValueOnce({ secondFactor: false, sessions: [current] });
+    vi.mocked(revokeOtherPlusSessions).mockResolvedValue("ok");
+
+    await renderView();
+
+    await act(async () => {
+        fireEvent.click(document.getElementById("sessions-revoke-others")!);
+    });
+
+    expect(document.getElementById("dialog-revoke-others-count")).toHaveTextContent("Other sessions: 2");
+
+    await act(async () => {
+        fireEvent.click(document.getElementById("dialog-revoke-others")!);
+    });
+
+    expect(revokeOtherPlusSessions).toHaveBeenCalledOnce();
+    expect(revokePlusSession).not.toHaveBeenCalled();
+    expect(mockSignOut).not.toHaveBeenCalled();
+    expect(mockCreateSuccess).toHaveBeenCalledWith("Successfully signed out the other sessions");
+    await waitFor(() => expect(document.getElementById("sessions-revoke-others")).toBeNull());
+    expect(screen.getByText("Firefox on Linux")).toBeInTheDocument();
+});
+
+it("does nothing when signing out the other sessions is cancelled", async () => {
+    vi.mocked(getPlusSessions).mockResolvedValue({ secondFactor: false, sessions: [current, other] });
+
+    await renderView();
+
+    await act(async () => {
+        fireEvent.click(document.getElementById("sessions-revoke-others")!);
+    });
+    await act(async () => {
+        fireEvent.click(document.getElementById("dialog-cancel")!);
+    });
+
+    expect(revokeOtherPlusSessions).not.toHaveBeenCalled();
+});
+
+it("retries signing out the other sessions once the second factor succeeds", async () => {
+    vi.mocked(getPlusSessions).mockResolvedValue({ secondFactor: false, sessions: [current, other] });
+    vi.mocked(revokeOtherPlusSessions).mockResolvedValueOnce("second_factor").mockResolvedValueOnce("ok");
+    vi.mocked(getUserSessionElevation).mockResolvedValue(elevation);
+
+    await renderView();
+    await confirmRevokeOthers();
+
+    expect(screen.getByTestId("second-factor-dialog")).toHaveAttribute("data-opening", "true");
+    expect(document.getElementById("sessions-revoke-others")).toBeDisabled();
+
+    await act(async () => {
+        fireEvent.click(screen.getByTestId("sf-closed-ok-changed"));
+    });
+
+    expect(revokeOtherPlusSessions).toHaveBeenCalledTimes(2);
+    expect(revokePlusSession).not.toHaveBeenCalled();
+    expect(mockCreateSuccess).toHaveBeenCalledOnce();
+});
+
+it("notifies when signing out the other sessions fails", async () => {
+    vi.mocked(getPlusSessions).mockResolvedValue({ secondFactor: false, sessions: [current, other] });
+    vi.mocked(revokeOtherPlusSessions).mockRejectedValue(new Error("failed"));
+
+    await renderView();
+    await confirmRevokeOthers();
+
+    expect(mockCreateError).toHaveBeenCalledWith("There was a problem signing out the other sessions");
+    expect(document.getElementById("sessions-revoke-others")).not.toBeDisabled();
+});
+
+it("disables sign out all other sessions while a single revoke runs", async () => {
+    vi.mocked(getPlusSessions).mockResolvedValue({ secondFactor: false, sessions: [current, other] });
+    vi.mocked(revokePlusSession).mockReturnValue(new Promise(() => {}));
+
+    await renderView();
+    await confirmRevoke(other.id);
+
+    expect(document.getElementById("sessions-revoke-others")).toBeDisabled();
 });
