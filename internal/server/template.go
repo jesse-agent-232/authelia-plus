@@ -235,6 +235,9 @@ func NewTemplatedFileOptions(config *schema.Configuration) (opts *TemplatedFileO
 		EndpointsDuo:            !config.DuoAPI.Disable,
 		EndpointsOpenIDConnect:  config.IdentityProviders.OIDC != nil,
 		EndpointsAuthz:          config.Server.Endpoints.Authz,
+
+		// authelia-plus: the operator's stylesheet, see custom_css.go.
+		CustomCSS: getCustomCSSVersion(config.Server.AssetPath),
 	}
 
 	if config.PrivacyPolicy.Enabled {
@@ -272,6 +275,9 @@ type TemplatedFileOptions struct {
 	EndpointsOpenIDConnect  bool
 
 	EndpointsAuthz map[string]schema.ServerEndpointsAuthz
+
+	// authelia-plus: the custom.css link's cache busting value, empty when there is no custom.css.
+	CustomCSS string
 }
 
 // CommonData returns a TemplatedFileCommonData with the dynamic options.
@@ -297,6 +303,9 @@ func (options *TemplatedFileOptions) CommonData(base, baseURL, domain, nonce, la
 		PrivacyPolicyAccept:    options.PrivacyPolicyAccept,
 		Session:                options.Session,
 		Theme:                  options.Theme,
+
+		// authelia-plus: the operator's stylesheet.
+		CustomCSS: options.CustomCSS,
 	}
 }
 
@@ -317,6 +326,9 @@ func (options *TemplatedFileOptions) commonDataWithRememberMe(base, baseURL, dom
 		PrivacyPolicyAccept:    options.PrivacyPolicyAccept,
 		Session:                options.Session,
 		Theme:                  options.Theme,
+
+		// authelia-plus: the operator's stylesheet.
+		CustomCSS: options.CustomCSS,
 	}
 }
 
@@ -356,6 +368,9 @@ type TemplatedFileCommonData struct {
 	PrivacyPolicyAccept    string
 	Session                string
 	Theme                  string
+
+	// authelia-plus: the custom.css link's cache busting value, empty when there is no custom.css.
+	CustomCSS string
 }
 
 // TemplatedFileOpenAPIData is a struct which is used for the OpenAPI spec file.

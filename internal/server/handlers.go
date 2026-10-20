@@ -173,6 +173,10 @@ func handlerMain(config *schema.Configuration, providers middlewares.Providers) 
 	r.HEAD("/static/media/logo.png", middlewares.AssetOverride(config.Server.AssetPath, 2, handlerPublicHTML))
 	r.GET("/static/media/logo.png", middlewares.AssetOverride(config.Server.AssetPath, 2, handlerPublicHTML))
 
+	// authelia-plus: the operator's stylesheet, see custom_css.go.
+	r.HEAD("/static/custom.css", newCustomCSSHandler(config.Server.AssetPath, handlerPublicHTML))
+	r.GET("/static/custom.css", newCustomCSSHandler(config.Server.AssetPath, handlerPublicHTML))
+
 	r.HEAD("/static/{filepath:*}", handlerPublicHTML)
 	r.GET("/static/{filepath:*}", handlerPublicHTML)
 

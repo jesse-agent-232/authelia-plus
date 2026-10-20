@@ -25,6 +25,7 @@ This guide effectively documents the usage of the
 
 ```console
 /config/assets/
+├── custom.css
 ├── favicon.ico
 ├── logo.png
 └── locales/<lang>[-[variant]]/<namespace>.json
@@ -32,11 +33,31 @@ This guide effectively documents the usage of the
 
 ## Assets
 
-|        Asset        |  File Name  | Directory |          Notes          |
-| :-----------------: | :---------: | :-------: | :---------------------: |
-|       Favicon       | favicon.ico |    No     |           N/A           |
-|        Logo         |  logo.png   |    No     |           N/A           |
-| Translation Locales |   locales   |    Yes    | see [locales](#locales) |
+|        Asset        |  File Name  | Directory |            Notes             |
+| :-----------------: | :---------: | :-------: | :--------------------------: |
+|       Favicon       | favicon.ico |    No     |             N/A              |
+|        Logo         |  logo.png   |    No     |             N/A              |
+| Translation Locales |   locales   |    Yes    |   see [locales](#locales)    |
+|     Stylesheet      | custom.css  |    No     | see [custom.css](#customcss) |
+
+## custom.css
+
+{{< callout context="caution" title="Important Note" icon="outline/alert-triangle" >}}
+The portal's markup and class names are not a stable interface and can change between releases. For example 4.39.28
+moved the portal to Tailwind, which changed its class names throughout. Check your stylesheet against the portal after
+each upgrade.
+{{< /callout >}}
+
+A `custom.css` file in the asset path is served at `/static/custom.css` and linked from the portal after the portal's
+own stylesheet, so its rules take precedence over the portal's rules of equal specificity. Only this file name is
+served; no other stylesheet in the asset path is.
+
+The file is checked once at startup: the link is only added when the file exists, and its URL carries a hash of the
+file's content so browsers fetch a changed file. Restart Authelia after adding, removing or changing `custom.css`.
+
+The stylesheet is served from Authelia itself, so the default Content Security Policy allows it without changes.
+Inline styles are not supported, and anything the stylesheet loads, such as a font or an image, must also come from
+Authelia or be permitted by a custom [Content Security Policy](../../configuration/miscellaneous/server.md#csp_template).
 
 ## locales
 
