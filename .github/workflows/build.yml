@@ -17,6 +17,13 @@ on:
 permissions:
   contents: read
 
+# One run per branch at a time, so two quick merges to main don't both work
+# out the same -plus version. A queued run waits rather than cancelling the
+# one that is publishing.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
