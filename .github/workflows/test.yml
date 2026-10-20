@@ -1,0 +1,149 @@
+# SPDX-FileCopyrightText: 2026 Authelia
+#
+# SPDX-License-Identifier: Apache-2.0
+
+---
+# The checks upstream runs on Buildkite (.buildkite/pipeline.sh), on GitHub's
+# runners: the Linting step, the Unit Test step, and the commit message rules
+# its lefthook commit-msg hook enforces. The integration suites, which need
+# upstream's Buildkite agents, are not run here.
+name: Build & test
+
+on:
+  pull_request:
+    branches: [dev, main]
+
+permissions:
+  contents: read
+
+jobs:
+  # Buildkite ":service_dog: Linting": .buildkite/steps/lint.sh with no
+  # arguments, which runs golangci-lint, yamllint, shellcheck, eslint (web),
+  # eslint (docs) and reuse.
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413  # v6.1.0
+        with:
+          version: 12.4.2
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: 24
+
+      - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a  # v9.3.0
+        with:
+          version: v2.13.2  # the release current at v4.39.28; newer ones flag upstream code
+          install-only: true
+
+      - name: Install yamllint and reuse
+        run: pipx install yamllint && pipx install reuse
+
+      # As .buildkite/hooks/pre-command does for this step.
+      - name: Install web and docs dependencies
+        run: |
+          pnpm -C web install --frozen-lockfile
+          pnpm -C docs install --frozen-lockfile --no-optional
+
+      - name: Lint
+        run: .buildkite/steps/lint.sh
+
+  # Buildkite ":hammer_and_wrench: Unit Test": `authelia-scripts ci
+  # --buildkite`, which is `authelia-scripts build` then `authelia-scripts
+  # unittest`. The steps are spelled out because --buildkite also switches the
+  # build to upstream's GoReleaser container.
+  unit-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0  # the build reads its version from git describe
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413  # v6.1.0
+        with:
+          version: 12.4.2
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: 24
+
+      - name: Build
+        run: go run ./cmd/authelia-scripts --log-level debug build
+
+      # Two tests assume upstream's agents: model expects a UTC+11 local time
+      # zone, and utils expects the checkout directory to end in the
+      # Buildkite pipeline slug.
+      - name: Go tests
+        env:
+          TZ: Australia/Melbourne
+          BUILDKITE_PIPELINE_SLUG: ${{ github.event.repository.name }}
+        # The package list is split on purpose, as upstream's unittest does.
+        run: |
+          # shellcheck disable=SC2046
+          go test -race -coverprofile=coverage.txt -covermode=atomic $(go list ./... | grep -v suites)
+
+      - name: Web tests
+        env:
+          CI: "true"
+          NODE_OPTIONS: --no-deprecation
+        run: pnpm -C web test
+
+  # Upstream's lefthook commit-msg hook runs commitlint with
+  # web/commitlint.config.mjs, and its PR Labels workflow requires a
+  # conventional PR title. Both are checked here.
+  commitlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413  # v6.1.0
+        with:
+          version: 12.4.2
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: 24
+
+      - run: pnpm -C web install --frozen-lockfile --ignore-scripts
+
+      - name: Commit messages
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: pnpm -C web exec commitlint --verbose --from "$BASE" --to "$HEAD"
+
+      - name: PR title
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: printf '%s\n' "$TITLE" | pnpm -C web exec commitlint --verbose
+
+  # main only takes dev from this repo. The test lives in the `if`, not in
+  # `run:`, so the branch name never reaches a shell. Skipped (passing) on
+  # PRs into dev.
+  only-dev-to-main:
+    if: >-
+      github.base_ref == 'main' &&
+      (github.head_ref != 'dev' || github.event.pull_request.head.repo.full_name != github.repository)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refuse
+        run: |
+          echo "::error::PRs into main must come from dev"
+          exit 1
+...
