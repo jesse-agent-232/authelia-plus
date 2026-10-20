@@ -96,3 +96,22 @@ export async function revokePlusSession(id: string): Promise<PlusSessionRevokeRe
 
     return "ok";
 }
+
+// Revokes every session of the user's except the current one.
+export async function revokeOtherPlusSessions(): Promise<Exclude<PlusSessionRevokeResult, "not_found">> {
+    const res = await axios<OKResponse | PlusSessionsForbiddenResponse>({
+        method: "DELETE",
+        url: PlusSessionsPath,
+        validateStatus: validateStatusPlusSessions,
+    });
+
+    if (isSecondFactorRequired(res.status, res.data)) {
+        return "second_factor";
+    }
+
+    if (res.status !== 200 || res.data.status !== "OK") {
+        throw new Error(`Failed DELETE to ${PlusSessionsPath}. Code: ${res.status}.`);
+    }
+
+    return "ok";
+}

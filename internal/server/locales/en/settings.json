@@ -186,5 +186,12 @@
 	"revoking": "revoking",
 	"session": "session",
 	"sessions": "sessions",
-	"unknown": "unknown"
+	"unknown": "unknown",
+	"Sign out all other sessions": "Sign out all other sessions",
+	"Are you sure you want to sign out all other sessions, every other device will be signed out and this one stays signed in": "Are you sure you want to sign out all other sessions, every other device will be signed out and this one stays signed in",
+	"Other sessions: {{count}}": "Other sessions: {{count}}",
+	"Sign Out Others": "Sign Out Others",
+	"other sessions": "other sessions",
+	"signed out": "signed out",
+	"signing out": "signing out"
 }

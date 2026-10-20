@@ -2,10 +2,11 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// authelia-plus: the user's active sessions, each of which they can revoke.
+// authelia-plus: the user's active sessions, each of which they can revoke, or all the others at once.
 
 import { Fragment, useCallback, useEffect, useState } from "react";
 
+import { LogOut } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@components/UI/Button";
@@ -14,11 +15,15 @@ import { Spinner } from "@components/UI/Spinner";
 import { useNotifications } from "@contexts/NotificationsContext";
 import { useSignOut } from "@hooks/SignOut";
 import { useUserInfoGET } from "@hooks/UserInfo";
-import { PlusSession, getPlusSessions, revokePlusSession } from "@services/PlusSessions";
+import { PlusSession, getPlusSessions, revokeOtherPlusSessions, revokePlusSession } from "@services/PlusSessions";
 import { UserSessionElevation, getUserSessionElevation } from "@services/UserSessionElevation";
 import SecondFactorDialog from "@views/Settings/Common/SecondFactorDialog";
 import SessionItem from "@views/Settings/Sessions/SessionItem";
 import SessionRevokeDialog from "@views/Settings/Sessions/SessionRevokeDialog";
+import SessionRevokeOthersDialog from "@views/Settings/Sessions/SessionRevokeOthersDialog";
+
+// What a revoke is for: one session, or every session except the current one.
+type RevokeTarget = "others" | PlusSession;
 
 const SessionsView = function () {
     const { t: translate } = useTranslation("settings");
@@ -30,9 +35,11 @@ const SessionsView = function () {
     const [secondFactor, setSecondFactor] = useState(false);
     const [elevation, setElevation] = useState<UserSessionElevation>();
     const [dialogSFOpening, setDialogSFOpening] = useState(false);
-    const [revokeTarget, setRevokeTarget] = useState<PlusSession>();
+    const [revokeTarget, setRevokeTarget] = useState<RevokeTarget>();
     // The one revoke in flight, including while it waits on the second factor. Others are refused until it's done.
-    const [revoking, setRevoking] = useState<PlusSession>();
+    const [revoking, setRevoking] = useState<RevokeTarget>();
+
+    const otherCount = sessions?.filter((session) => !session.current).length ?? 0;
 
     const handleRefresh = useCallback(() => {
         getPlusSessions()
@@ -85,10 +92,10 @@ const SessionsView = function () {
             });
     };
 
-    const handleRevoke = (session: PlusSession) => {
-        setRevoking(session);
+    const handleRevoke = (target: RevokeTarget) => {
+        setRevoking(target);
 
-        revokePlusSession(session.id)
+        (target === "others" ? revokeOtherPlusSessions() : revokePlusSession(target.id))
             .then((result) => {
                 if (result === "second_factor") {
                     handleSecondFactor();
@@ -100,7 +107,14 @@ const SessionsView = function () {
 
                 if (result === "not_found") {
                     createInfoNotification(translate("This session has already ended"));
-                } else if (session.current) {
+                } else if (target === "others") {
+                    createSuccessNotification(
+                        translate("Successfully {{action}} the {{item}}", {
+                            action: translate("signed out"),
+                            item: translate("other sessions"),
+                        }),
+                    );
+                } else if (target.current) {
                     signOut(false);
 
                     return;
@@ -120,15 +134,15 @@ const SessionsView = function () {
                 setRevoking(undefined);
                 createErrorNotification(
                     translate("There was a problem {{action}} the {{item}}", {
-                        action: translate("revoking"),
-                        item: translate("session"),
+                        action: target === "others" ? translate("signing out") : translate("revoking"),
+                        item: target === "others" ? translate("other sessions") : translate("session"),
                     }),
                 );
             });
     };
 
     const handleSFDialogClosed = (ok: boolean, changed: boolean) => {
-        const session = revoking;
+        const target = revoking;
 
         setElevation(undefined);
         setRevoking(undefined);
@@ -137,20 +151,20 @@ const SessionsView = function () {
             return;
         }
 
-        if (session) {
-            handleRevoke(session);
+        if (target) {
+            handleRevoke(target);
         } else {
             handleRefresh();
         }
     };
 
     const handleRevokeConfirm = () => {
-        const session = revokeTarget;
+        const target = revokeTarget;
 
         setRevokeTarget(undefined);
 
-        if (session && !revoking) {
-            handleRevoke(session);
+        if (target && !revoking) {
+            handleRevoke(target);
         }
     };
 
@@ -209,7 +223,14 @@ const SessionsView = function () {
                 }}
             />
             <SessionRevokeDialog
-                session={revokeTarget}
+                session={revokeTarget === "others" ? undefined : revokeTarget}
+                onConfirm={handleRevokeConfirm}
+                onCancel={() => {
+                    setRevokeTarget(undefined);
+                }}
+            />
+            <SessionRevokeOthersDialog
+                count={revokeTarget === "others" ? otherCount : undefined}
                 onConfirm={handleRevokeConfirm}
                 onCancel={() => {
                     setRevokeTarget(undefined);
@@ -223,13 +244,29 @@ const SessionsView = function () {
                         data-loading={!secondFactor && sessions === undefined ? "true" : "false"}
                     >
                         <CardContent className="grid grid-cols-12 gap-4 p-4">
-                            <div className="col-span-12">
-                                <h5 className="text-xl font-semibold">{translate("Sessions")}</h5>
-                                <p className="text-sm text-muted-foreground">
-                                    {translate(
-                                        "These are the devices signed in to your account, revoke any you don't recognize",
-                                    )}
-                                </p>
+                            <div className="col-span-12 flex flex-wrap items-start justify-between gap-2">
+                                <div>
+                                    <h5 className="text-xl font-semibold">{translate("Sessions")}</h5>
+                                    <p className="text-sm text-muted-foreground">
+                                        {translate(
+                                            "These are the devices signed in to your account, revoke any you don't recognize",
+                                        )}
+                                    </p>
+                                </div>
+                                {otherCount > 0 ? (
+                                    <Button
+                                        id={"sessions-revoke-others"}
+                                        variant={"outline"}
+                                        color={"destructive"}
+                                        disabled={revoking !== undefined}
+                                        onClick={() => {
+                                            setRevokeTarget("others");
+                                        }}
+                                    >
+                                        <LogOut className="size-4" />
+                                        {translate("Sign out all other sessions")}
+                                    </Button>
+                                ) : null}
                             </div>
                             <div className="col-span-12">{renderSessions()}</div>
                         </CardContent>

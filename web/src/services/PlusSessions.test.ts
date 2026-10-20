@@ -4,7 +4,7 @@
 
 import axios from "axios";
 
-import { getPlusSessions, revokePlusSession } from "@services/PlusSessions";
+import { getPlusSessions, revokeOtherPlusSessions, revokePlusSession } from "@services/PlusSessions";
 
 vi.mock("axios");
 vi.mock("@services/Api", () => ({
@@ -108,4 +108,24 @@ it("throws when revoking fails", async () => {
     await expect(revokePlusSession(session.id)).rejects.toThrow(
         `Failed DELETE to /api/plus/sessions/${session.id}. Code: 500.`,
     );
+});
+
+it("revokes the other sessions", async () => {
+    (axios as any).mockResolvedValue({ data: { data: { count: 2 }, status: "OK" }, status: 200 });
+
+    await expect(revokeOtherPlusSessions()).resolves.toBe("ok");
+    expect(axios).toHaveBeenCalledWith(expect.objectContaining({ method: "DELETE", url: "/api/plus/sessions" }));
+    expect((vi.mocked(axios).mock.calls[0][0] as any).data).toBeUndefined();
+});
+
+it("reports that revoking the other sessions needs a second factor", async () => {
+    (axios as any).mockResolvedValue({ data: { data: { second_factor: true }, status: "KO" }, status: 403 });
+
+    await expect(revokeOtherPlusSessions()).resolves.toBe("second_factor");
+});
+
+it("throws when revoking the other sessions fails", async () => {
+    (axios as any).mockResolvedValue({ data: { message: "Operation failed", status: "KO" }, status: 404 });
+
+    await expect(revokeOtherPlusSessions()).rejects.toThrow("Failed DELETE to /api/plus/sessions. Code: 404.");
 });
