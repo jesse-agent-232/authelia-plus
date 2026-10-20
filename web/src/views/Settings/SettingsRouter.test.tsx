@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import { act, render } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 
 import { useAutheliaState } from "@hooks/State";
@@ -26,6 +26,7 @@ vi.mock("@constants/Routes", () => ({
     IndexRoute: "/",
     SecuritySubRoute: "/security",
     SettingsRoute: "/settings",
+    SettingsSessionsSubRoute: "/sessions",
     SettingsTwoFactorAuthenticationSubRoute: "/two-factor-authentication",
 }));
 
@@ -39,6 +40,10 @@ vi.mock("@views/Settings/SettingsView", () => ({
 
 vi.mock("@views/Settings/Security/SecurityView", () => ({
     default: () => <div data-testid="security-view" />,
+}));
+
+vi.mock("@views/Settings/Sessions/SessionsView", () => ({
+    default: () => <div data-testid="sessions-view" />,
 }));
 
 vi.mock("@views/Settings/TwoFactorAuthentication/TwoFactorAuthenticationView", () => ({
@@ -117,4 +122,21 @@ it("authenticated state does not call navigate", async () => {
         );
     });
     expect(mockNavigate).not.toHaveBeenCalled();
+});
+
+it("renders the sessions view on its route", async () => {
+    vi.mocked(useAutheliaState).mockReturnValue([
+        { authentication_level: 2, factor_knowledge: true, username: "test" },
+        vi.fn(),
+        false,
+        undefined,
+    ]);
+    await act(async () => {
+        render(
+            <MemoryRouter initialEntries={["/sessions"]}>
+                <SettingsRouter />
+            </MemoryRouter>,
+        );
+    });
+    expect(screen.getByTestId("sessions-view")).toBeInTheDocument();
 });

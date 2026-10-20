@@ -4,7 +4,7 @@
 
 import { ReactNode, SyntheticEvent, useCallback, useEffect, useState } from "react";
 
-import { LayoutDashboard, Menu, Shield, ShieldCheck, X } from "lucide-react";
+import { LayoutDashboard, Menu, MonitorSmartphone, Shield, ShieldCheck, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import { Button } from "@components/UI/Button";
@@ -15,6 +15,7 @@ import {
     IndexRoute,
     SecuritySubRoute,
     SettingsRoute,
+    SettingsSessionsSubRoute,
     SettingsTwoFactorAuthenticationSubRoute,
 } from "@constants/Routes";
 import { useRouterNavigate } from "@hooks/RouterNavigate";
@@ -110,6 +111,12 @@ const navItems: NavItem[] = [
         keyname: "security",
         pathname: `${SettingsRoute}${SecuritySubRoute}`,
         text: "Security",
+    },
+    {
+        icon: <MonitorSmartphone className="size-5 text-primary" />,
+        keyname: "sessions",
+        pathname: `${SettingsRoute}${SettingsSessionsSubRoute}`,
+        text: "Sessions",
     },
     {
         icon: <ShieldCheck className="size-5 text-primary" />,

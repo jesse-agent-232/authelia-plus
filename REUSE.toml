@@ -77,6 +77,34 @@ precedence = "override"
 SPDX-FileCopyrightText = "Apple, Inc."
 SPDX-License-Identifier = "LicenseRef-Trademark"
 
+# authelia-plus: the platform logos on the settings session list.
+[[annotations]]
+path = "web/src/assets/images/platforms/apple.svg"
+precedence = "override"
+SPDX-FileCopyrightText = "Apple, Inc."
+SPDX-License-Identifier = "LicenseRef-Trademark"
+
+[[annotations]]
+path = [
+  "web/src/assets/images/platforms/android.svg",
+  "web/src/assets/images/platforms/chrome.svg",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "Google LLC"
+SPDX-License-Identifier = "LicenseRef-Trademark"
+
+[[annotations]]
+path = "web/src/assets/images/platforms/linux.svg"
+precedence = "override"
+SPDX-FileCopyrightText = "Larry Ewing and The GIMP"
+SPDX-License-Identifier = "LicenseRef-Tux"
+
+[[annotations]]
+path = "web/src/assets/images/platforms/windows.svg"
+precedence = "override"
+SPDX-FileCopyrightText = "Microsoft Corporation"
+SPDX-License-Identifier = "LicenseRef-Trademark"
+
 [[annotations]]
 path = [
   "docs/static/images/logos/envoy.png",

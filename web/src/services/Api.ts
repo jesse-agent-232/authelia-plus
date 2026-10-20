@@ -43,6 +43,7 @@ export const StatePath = basePath + "/api/state";
 export const UserInfoPath = basePath + "/api/user/info";
 export const UserInfo2FAMethodPath = basePath + "/api/user/info/2fa_method";
 export const UserSessionElevationPath = basePath + "/api/user/session/elevation";
+export const PlusSessionsPath = basePath + "/api/plus/sessions";
 
 export const ConfigurationPath = basePath + "/api/configuration";
 export const PasswordPolicyConfigurationPath = basePath + "/api/configuration/password-policy";

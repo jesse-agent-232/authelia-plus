@@ -20,6 +20,7 @@ vi.mock("@constants/Routes", () => ({
     IndexRoute: "/",
     SecuritySubRoute: "/security",
     SettingsRoute: "/settings",
+    SettingsSessionsSubRoute: "/sessions",
     SettingsTwoFactorAuthenticationSubRoute: "/two-factor-authentication",
 }));
 
@@ -63,6 +64,7 @@ it("renders navigation items", async () => {
 
     expect(screen.getByText("Overview")).toBeInTheDocument();
     expect(screen.getByText("Security")).toBeInTheDocument();
+    expect(screen.getByText("Sessions")).toBeInTheDocument();
     expect(screen.getByText("Two-Factor Authentication")).toBeInTheDocument();
     expect(screen.getAllByText("Close").length).toBeGreaterThanOrEqual(1);
 });

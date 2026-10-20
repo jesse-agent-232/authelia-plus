@@ -6,12 +6,18 @@ import { useEffect } from "react";
 
 import { Route, Routes } from "react-router";
 
-import { IndexRoute, SecuritySubRoute, SettingsTwoFactorAuthenticationSubRoute } from "@constants/Routes";
+import {
+    IndexRoute,
+    SecuritySubRoute,
+    SettingsSessionsSubRoute,
+    SettingsTwoFactorAuthenticationSubRoute,
+} from "@constants/Routes";
 import { useRouterNavigate } from "@hooks/RouterNavigate";
 import { useAutheliaState } from "@hooks/State";
 import SettingsLayout from "@layouts/SettingsLayout";
 import { AuthenticationLevel } from "@services/State";
 import SecurityView from "@views/Settings/Security/SecurityView";
+import SessionsView from "@views/Settings/Sessions/SessionsView";
 import SettingsView from "@views/Settings/SettingsView";
 import TwoFactorAuthenticationView from "@views/Settings/TwoFactorAuthentication/TwoFactorAuthenticationView";
 
@@ -34,6 +40,7 @@ const SettingsRouter = function () {
             <Routes>
                 <Route path={IndexRoute} element={<SettingsView />} />
                 <Route path={SecuritySubRoute} element={<SecurityView />} />
+                <Route path={SettingsSessionsSubRoute} element={<SessionsView />} />
                 <Route path={SettingsTwoFactorAuthenticationSubRoute} element={<TwoFactorAuthenticationView />} />
             </Routes>
         </SettingsLayout>

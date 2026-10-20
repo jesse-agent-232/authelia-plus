@@ -20,6 +20,7 @@ export const SettingsTwoFactorAuthenticationSubRoute: string = "/two-factor-auth
 export const RevokeOneTimeCodeRoute: string = "/revoke/one-time-code";
 export const RevokeResetPasswordRoute: string = "/revoke/reset-password";
 export const SecuritySubRoute: string = "/security";
+export const SettingsSessionsSubRoute: string = "/sessions"; // authelia-plus
 
 export const ConsentRoute: string = "/consent";
 export const ConsentCompletionSubRoute: string = "/completion";
