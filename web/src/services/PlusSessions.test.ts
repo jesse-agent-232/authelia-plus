@@ -102,6 +102,15 @@ it("reports that revoking needs a second factor", async () => {
     await expect(revokePlusSession(session.id)).resolves.toBe("second_factor");
 });
 
+it("reports that revoking needs the session elevated", async () => {
+    (axios as any).mockResolvedValue({
+        data: { data: { elevation: true, first_factor: false, second_factor: false }, status: "KO" },
+        status: 403,
+    });
+
+    await expect(revokePlusSession(session.id)).resolves.toBe("elevation");
+});
+
 it("throws when revoking fails", async () => {
     (axios as any).mockResolvedValue({ data: { message: "Operation failed", status: "KO" }, status: 500 });
 
@@ -122,6 +131,15 @@ it("reports that revoking the other sessions needs a second factor", async () =>
     (axios as any).mockResolvedValue({ data: { data: { second_factor: true }, status: "KO" }, status: 403 });
 
     await expect(revokeOtherPlusSessions()).resolves.toBe("second_factor");
+});
+
+it("reports that revoking the other sessions needs the session elevated", async () => {
+    (axios as any).mockResolvedValue({
+        data: { data: { elevation: true, first_factor: false, second_factor: false }, status: "KO" },
+        status: 403,
+    });
+
+    await expect(revokeOtherPlusSessions()).resolves.toBe("elevation");
 });
 
 it("throws when revoking the other sessions fails", async () => {
