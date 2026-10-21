@@ -28,15 +28,16 @@ interface PlusSessionJSON {
     current: boolean;
 }
 
-// The 403 both endpoints answer when the user has a second factor enrolled but only did the first.
+// The 403 the endpoints answer when the user has a second factor enrolled but only did the first, or when revoking
+// another session needs the session elevated with a one-time code first.
 interface PlusSessionsForbiddenResponse {
     status: "KO";
-    data?: { second_factor?: boolean };
+    data?: { elevation?: boolean; second_factor?: boolean };
 }
 
 export type PlusSessionsResult = { secondFactor: true } | { sessions: PlusSession[]; secondFactor: false };
 
-export type PlusSessionRevokeResult = "not_found" | "ok" | "second_factor";
+export type PlusSessionRevokeResult = "elevation" | "not_found" | "ok" | "second_factor";
 
 function validateStatusPlusSessions(status: number) {
     return (status >= 200 && status < 300) || status === 403 || status === 404;
@@ -44,6 +45,10 @@ function validateStatusPlusSessions(status: number) {
 
 function isSecondFactorRequired(status: number, data: OKResponse | PlusSessionsForbiddenResponse) {
     return status === 403 && data.status === "KO" && data.data?.second_factor === true;
+}
+
+function isElevationRequired(status: number, data: OKResponse | PlusSessionsForbiddenResponse) {
+    return status === 403 && data.status === "KO" && data.data?.elevation === true;
 }
 
 function toPlusSession(session: PlusSessionJSON): PlusSession {
@@ -86,6 +91,10 @@ export async function revokePlusSession(id: string): Promise<PlusSessionRevokeRe
         return "second_factor";
     }
 
+    if (isElevationRequired(res.status, res.data)) {
+        return "elevation";
+    }
+
     if (res.status === 404) {
         return "not_found";
     }
@@ -107,6 +116,10 @@ export async function revokeOtherPlusSessions(): Promise<Exclude<PlusSessionRevo
 
     if (isSecondFactorRequired(res.status, res.data)) {
         return "second_factor";
+    }
+
+    if (isElevationRequired(res.status, res.data)) {
+        return "elevation";
     }
 
     if (res.status !== 200 || res.data.status !== "OK") {

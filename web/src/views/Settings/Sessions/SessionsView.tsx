@@ -17,6 +17,7 @@ import { useSignOut } from "@hooks/SignOut";
 import { useUserInfoGET } from "@hooks/UserInfo";
 import { PlusSession, getPlusSessions, revokeOtherPlusSessions, revokePlusSession } from "@services/PlusSessions";
 import { UserSessionElevation, getUserSessionElevation } from "@services/UserSessionElevation";
+import IdentityVerificationDialog from "@views/Settings/Common/IdentityVerificationDialog";
 import SecondFactorDialog from "@views/Settings/Common/SecondFactorDialog";
 import SessionItem from "@views/Settings/Sessions/SessionItem";
 import SessionRevokeDialog from "@views/Settings/Sessions/SessionRevokeDialog";
@@ -35,8 +36,9 @@ const SessionsView = function () {
     const [secondFactor, setSecondFactor] = useState(false);
     const [elevation, setElevation] = useState<UserSessionElevation>();
     const [dialogSFOpening, setDialogSFOpening] = useState(false);
+    const [dialogIVOpening, setDialogIVOpening] = useState(false);
     const [revokeTarget, setRevokeTarget] = useState<RevokeTarget>();
-    // The one revoke in flight, including while it waits on the second factor. Others are refused until it's done.
+    // The one revoke in flight, including while it waits on a dialog. Others are refused until it's done.
     const [revoking, setRevoking] = useState<RevokeTarget>();
 
     const otherCount = sessions?.filter((session) => !session.current).length ?? 0;
@@ -92,6 +94,24 @@ const SessionsView = function () {
             });
     };
 
+    // The same one-time code dialog the credential settings use: revoking another session needs the session elevated.
+    const handleElevation = () => {
+        getUserSessionElevation()
+            .then((result) => {
+                if (!result) {
+                    throw new Error("The session elevation status was empty");
+                }
+
+                setElevation(result);
+                setDialogIVOpening(true);
+            })
+            .catch((error) => {
+                console.error(error);
+                setRevoking(undefined);
+                createErrorNotification(translate("Failed to get session elevation status"));
+            });
+    };
+
     const handleRevoke = (target: RevokeTarget) => {
         setRevoking(target);
 
@@ -99,6 +119,12 @@ const SessionsView = function () {
             .then((result) => {
                 if (result === "second_factor") {
                     handleSecondFactor();
+
+                    return;
+                }
+
+                if (result === "elevation") {
+                    handleElevation();
 
                     return;
                 }
@@ -155,6 +181,18 @@ const SessionsView = function () {
             handleRevoke(target);
         } else {
             handleRefresh();
+        }
+    };
+
+    const handleIVDialogClosed = (ok: boolean) => {
+        const target = revoking;
+
+        setDialogIVOpening(false);
+        setElevation(undefined);
+        setRevoking(undefined);
+
+        if (ok && target) {
+            handleRevoke(target);
         }
     };
 
@@ -221,6 +259,13 @@ const SessionsView = function () {
                 handleOpened={() => {
                     setDialogSFOpening(false);
                 }}
+            />
+            {/* The dialog only shows while opening is set, so it stays set until the dialog closes. */}
+            <IdentityVerificationDialog
+                elevation={elevation}
+                opening={dialogIVOpening}
+                handleClosed={handleIVDialogClosed}
+                handleOpened={() => {}}
             />
             <SessionRevokeDialog
                 session={revokeTarget === "others" ? undefined : revokeTarget}

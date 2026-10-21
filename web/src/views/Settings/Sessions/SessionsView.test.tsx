@@ -68,6 +68,19 @@ vi.mock("@views/Settings/Common/SecondFactorDialog", () => ({
     ),
 }));
 
+vi.mock("@views/Settings/Common/IdentityVerificationDialog", () => ({
+    default: (props: any) => (
+        <div
+            data-testid="identity-verification-dialog"
+            data-opening={String(props.opening)}
+            data-elevation={JSON.stringify(props.elevation ?? null)}
+        >
+            <button data-testid="iv-closed-ok" onClick={() => props.handleClosed(true)} />
+            <button data-testid="iv-closed-cancel" onClick={() => props.handleClosed(false)} />
+        </div>
+    ),
+}));
+
 const current: PlusSession = {
     created_at: new Date("2026-10-20T08:00:00Z"),
     current: true,
@@ -439,4 +452,108 @@ it("disables sign out all other sessions while a single revoke runs", async () =
     await confirmRevoke(other.id);
 
     expect(document.getElementById("sessions-revoke-others")).toBeDisabled();
+});
+
+it("retries the revoke once the session is elevated with a one-time code", async () => {
+    vi.mocked(getPlusSessions).mockResolvedValue({ secondFactor: false, sessions: [current, other] });
+    vi.mocked(revokePlusSession).mockResolvedValueOnce("elevation").mockResolvedValueOnce("ok");
+    vi.mocked(getUserSessionElevation).mockResolvedValue(elevation);
+
+    await renderView();
+    await confirmRevoke(other.id);
+
+    const dialog = screen.getByTestId("identity-verification-dialog");
+    expect(dialog).toHaveAttribute("data-opening", "true");
+    expect(dialog).toHaveAttribute("data-elevation", JSON.stringify(elevation));
+    expect(screen.getByTestId("second-factor-dialog")).toHaveAttribute("data-opening", "false");
+    expect(document.getElementById(`session-${current.id}-revoke`)).toBeDisabled();
+
+    await act(async () => {
+        fireEvent.click(screen.getByTestId("iv-closed-ok"));
+    });
+
+    expect(revokePlusSession).toHaveBeenCalledTimes(2);
+    expect(revokePlusSession).toHaveBeenLastCalledWith(other.id);
+    expect(mockCreateSuccess).toHaveBeenCalledOnce();
+    expect(screen.getByTestId("identity-verification-dialog")).toHaveAttribute("data-opening", "false");
+});
+
+it("drops the revoke when the one-time code is cancelled", async () => {
+    vi.mocked(getPlusSessions).mockResolvedValue({ secondFactor: false, sessions: [current, other] });
+    vi.mocked(revokePlusSession).mockResolvedValue("elevation");
+    vi.mocked(getUserSessionElevation).mockResolvedValue(elevation);
+
+    await renderView();
+    await confirmRevoke(other.id);
+
+    await act(async () => {
+        fireEvent.click(screen.getByTestId("iv-closed-cancel"));
+    });
+
+    expect(revokePlusSession).toHaveBeenCalledOnce();
+    expect(mockCreateSuccess).not.toHaveBeenCalled();
+    expect(screen.getByTestId("identity-verification-dialog")).toHaveAttribute("data-opening", "false");
+    expect(screen.getByTestId("identity-verification-dialog")).toHaveAttribute("data-elevation", "null");
+    expect(document.getElementById(`session-${other.id}-revoke`)).not.toBeDisabled();
+});
+
+it("asks for the second factor and then the one-time code when the server wants both", async () => {
+    vi.mocked(getPlusSessions).mockResolvedValue({ secondFactor: false, sessions: [current, other] });
+    vi.mocked(revokePlusSession)
+        .mockResolvedValueOnce("second_factor")
+        .mockResolvedValueOnce("elevation")
+        .mockResolvedValueOnce("ok");
+    vi.mocked(getUserSessionElevation).mockResolvedValue(elevation);
+
+    await renderView();
+    await confirmRevoke(other.id);
+
+    expect(screen.getByTestId("second-factor-dialog")).toHaveAttribute("data-opening", "true");
+    expect(screen.getByTestId("identity-verification-dialog")).toHaveAttribute("data-opening", "false");
+
+    await act(async () => {
+        fireEvent.click(screen.getByTestId("sf-closed-ok-changed"));
+    });
+
+    expect(screen.getByTestId("identity-verification-dialog")).toHaveAttribute("data-opening", "true");
+
+    await act(async () => {
+        fireEvent.click(screen.getByTestId("iv-closed-ok"));
+    });
+
+    expect(revokePlusSession).toHaveBeenCalledTimes(3);
+    expect(mockCreateSuccess).toHaveBeenCalledOnce();
+});
+
+it("retries signing out the other sessions once the session is elevated with a one-time code", async () => {
+    vi.mocked(getPlusSessions).mockResolvedValue({ secondFactor: false, sessions: [current, other, third] });
+    vi.mocked(revokeOtherPlusSessions).mockResolvedValueOnce("elevation").mockResolvedValueOnce("ok");
+    vi.mocked(getUserSessionElevation).mockResolvedValue(elevation);
+
+    await renderView();
+    await confirmRevokeOthers();
+
+    expect(screen.getByTestId("identity-verification-dialog")).toHaveAttribute("data-opening", "true");
+    expect(document.getElementById("sessions-revoke-others")).toBeDisabled();
+
+    await act(async () => {
+        fireEvent.click(screen.getByTestId("iv-closed-ok"));
+    });
+
+    expect(revokeOtherPlusSessions).toHaveBeenCalledTimes(2);
+    expect(revokePlusSession).not.toHaveBeenCalled();
+    expect(mockCreateSuccess).toHaveBeenCalledOnce();
+});
+
+it("drops the revoke waiting on a one-time code when the elevation status can't be retrieved", async () => {
+    vi.mocked(getPlusSessions).mockResolvedValue({ secondFactor: false, sessions: [current, other] });
+    vi.mocked(revokePlusSession).mockResolvedValue("elevation");
+    vi.mocked(getUserSessionElevation).mockRejectedValue(new Error("failed"));
+
+    await renderView();
+    await confirmRevoke(other.id);
+
+    expect(mockCreateError).toHaveBeenCalledWith("Failed to get session elevation status");
+    expect(screen.getByTestId("identity-verification-dialog")).toHaveAttribute("data-opening", "false");
+    expect(document.getElementById(`session-${other.id}-revoke`)).not.toBeDisabled();
 });
