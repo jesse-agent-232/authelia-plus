@@ -26,12 +26,24 @@ const (
 )
 
 // newCustomCSSHandler serves custom.css from the asset path with nosniff, and falls back to next when there is no such
-// file. The content type comes from the .css extension, as text/css.
+// regular file. A directory named custom.css falls back too, as the file server would answer it with an HTML index. The
+// content type comes from the .css extension, as text/css.
 func newCustomCSSHandler(root string, next fasthttp.RequestHandler) fasthttp.RequestHandler {
+	if root == "" {
+		return next
+	}
+
 	handler := middlewares.AssetOverride(root, 1, next)
+	asset := filepath.Join(root, fileCustomCSS)
 
 	return func(ctx *fasthttp.RequestCtx) {
 		middlewares.SetBaseSecurityHeaders(ctx)
+
+		if info, err := os.Stat(asset); err != nil || !info.Mode().IsRegular() {
+			next(ctx)
+
+			return
+		}
 
 		handler(ctx)
 	}

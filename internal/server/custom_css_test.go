@@ -187,6 +187,29 @@ func TestCustomCSSShouldNotBeLinkedWhenAbsent(t *testing.T) {
 	}
 }
 
+func TestCustomCSSShouldNotServeADirectory(t *testing.T) {
+	dir := t.TempDir()
+
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, fileCustomCSS), 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, fileCustomCSS, "index.html"), []byte("<b>listing</b>"), 0o600))
+
+	handler := newCustomCSSTestHandler(t, dir)
+
+	ctx := doCustomCSSRequest(handler, fasthttp.MethodGet, "/")
+	require.Equal(t, fasthttp.StatusOK, ctx.Response.StatusCode())
+	assert.NotContains(t, string(ctx.Response.Body()), "custom.css")
+
+	for _, method := range []string{fasthttp.MethodGet, fasthttp.MethodHead} {
+		t.Run(method, func(t *testing.T) {
+			ctx := doCustomCSSRequest(handler, method, "/static/custom.css")
+
+			assert.Equal(t, fasthttp.StatusNotFound, ctx.Response.StatusCode())
+			assert.NotContains(t, string(ctx.Response.Header.ContentType()), "text/html")
+			assert.NotContains(t, string(ctx.Response.Body()), "listing")
+		})
+	}
+}
+
 func TestCustomCSSShouldOnlyServeTheFixedFile(t *testing.T) {
 	dir := t.TempDir()
 
